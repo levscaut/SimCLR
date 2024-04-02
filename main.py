@@ -69,13 +69,13 @@ def main(gpu, args):
             args.dataset_dir,
             split="unlabeled",
             download=True,
-            transform=TransformsSimCLR(size=args.image_size, n_views=1),
+            transform=TransformsSimCLR(size=args.image_size, n_views=2),
         )
     elif args.dataset == "CIFAR10":
         train_dataset = torchvision.datasets.CIFAR10(
             args.dataset_dir,
             download=True,
-            transform=TransformsSimCLR(size=args.image_size, n_views=1),
+            transform=TransformsSimCLR(size=args.image_size, n_views=2),
         )
     else:
         raise NotImplementedError
