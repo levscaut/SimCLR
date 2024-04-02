@@ -3,6 +3,7 @@ import argparse
 import torch
 import torchvision
 import torchvision.transforms as transforms
+from torchmetrics import Accuracy, Precision, Recall, F1
 import numpy as np
 
 from simclr import SimCLR
@@ -11,6 +12,15 @@ from simclr.modules.transformations import TransformsSimCLR
 
 from utils import yaml_config_hook
 
+def compute_metrics(preds, target):
+    metric_func = {
+        'acc': Accuracy(),
+        'precision': Precision(average="macro"),
+        'recall': Recall(average="macro"),
+        'f1': F1(average="macro")
+    }
+    metrics = {metric_name: metric_func[metric_name](preds, target) for metric_name in metric_func.keys()}
+    return metrics
 
 def inference(loader, simclr_model, device):
     feature_vector = []
@@ -61,7 +71,13 @@ def create_data_loaders_from_arrays(X_train, y_train, X_test, y_test, batch_size
 
 def train(args, loader, simclr_model, model, criterion, optimizer):
     loss_epoch = 0
-    accuracy_epoch = 0
+    epoch_metrics = {
+        "acc": 0,
+        "precision": 0,
+        "recall": 0,
+        "f1": 0
+    }
+    
     for step, (x, y) in enumerate(loader):
         optimizer.zero_grad()
 
@@ -72,8 +88,9 @@ def train(args, loader, simclr_model, model, criterion, optimizer):
         loss = criterion(output, y)
 
         predicted = output.argmax(1)
-        acc = (predicted == y).sum().item() / y.size(0)
-        accuracy_epoch += acc
+        metrics = compute_metrics(predicted, y)
+        for metric_name in metrics:
+            epoch_metrics[metric_name] += metrics[metric_name].item()
 
         loss.backward()
         optimizer.step()
@@ -84,13 +101,22 @@ def train(args, loader, simclr_model, model, criterion, optimizer):
         #         f"Step [{step}/{len(loader)}]\t Loss: {loss.item()}\t Accuracy: {acc}"
         #     )
 
-    return loss_epoch, accuracy_epoch
+    loss_epoch /= len(loader)
+    for metric_name in epoch_metrics:
+        epoch_metrics[metric_name] /= len(loader)
+
+    return loss_epoch, epoch_metrics
 
 
 def test(args, loader, simclr_model, model, criterion, optimizer):
     loss_epoch = 0
-    accuracy_epoch = 0
     model.eval()
+    epoch_metrics = {
+        "acc": 0,
+        "precision": 0,
+        "recall": 0,
+        "f1": 0
+    }
     for step, (x, y) in enumerate(loader):
         model.zero_grad()
 
@@ -101,12 +127,18 @@ def test(args, loader, simclr_model, model, criterion, optimizer):
         loss = criterion(output, y)
 
         predicted = output.argmax(1)
-        acc = (predicted == y).sum().item() / y.size(0)
-        accuracy_epoch += acc
+        metrics = compute_metrics(predicted, y)
+
+        for metric_name in metrics:
+            epoch_metrics[metric_name] += metrics[metric_name].item()
 
         loss_epoch += loss.item()
 
-    return loss_epoch, accuracy_epoch
+    loss_epoch /= len(loader)
+    for metric_name in epoch_metrics:
+        epoch_metrics[metric_name] /= len(loader)
+
+    return loss_epoch, epoch_metrics
 
 
 if __name__ == "__main__":
@@ -191,17 +223,21 @@ if __name__ == "__main__":
     )
 
     for epoch in range(args.logistic_epochs):
-        loss_epoch, accuracy_epoch = train(
+        loss_epoch, metrics_epoch = train(
             args, arr_train_loader, simclr_model, model, criterion, optimizer
         )
         print(
-            f"Epoch [{epoch}/{args.logistic_epochs}]\t Loss: {loss_epoch / len(arr_train_loader)}\t Accuracy: {accuracy_epoch / len(arr_train_loader)}"
+            f"Epoch [{epoch}/{args.logistic_epochs}]\t Loss: {loss_epoch:.4f}" + "\t".join(
+                [f"{k}: {v:.4f}" for k, v in metrics_epoch.items()]
+            )
         )
 
     # final testing
-    loss_epoch, accuracy_epoch = test(
+    loss_epoch, metrics_epoch = test(
         args, arr_test_loader, simclr_model, model, criterion, optimizer
     )
     print(
-        f"[FINAL]\t Loss: {loss_epoch / len(arr_test_loader)}\t Accuracy: {accuracy_epoch / len(arr_test_loader)}"
+        f"Test Result: \t Loss: {loss_epoch}\t" + "\t".join(
+            [f"{k}: {v}" for k, v in metrics_epoch.items()]
+        )
     )

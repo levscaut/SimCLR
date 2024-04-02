@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import torchvision
 import argparse
+from tqdm import tqdm
 
 # distributed training
 import torch.distributed as dist
@@ -25,7 +26,8 @@ from utils import yaml_config_hook
 
 def train(args, train_loader, model, criterion, optimizer, writer):
     loss_epoch = 0
-    for step, ((x_i, x_j), _) in enumerate(train_loader):
+    bar = tqdm(enumerate(train_loader), total=len(train_loader))
+    for step, ((x_i, x_j), _) in bar:
         optimizer.zero_grad()
         x_i = x_i.cuda(non_blocking=True)
         x_j = x_j.cuda(non_blocking=True)
@@ -42,8 +44,7 @@ def train(args, train_loader, model, criterion, optimizer, writer):
             loss = loss.data.clone()
             dist.all_reduce(loss.div_(dist.get_world_size()))
 
-        if args.nr == 0 and step % 50 == 0:
-            print(f"Step [{step}/{len(train_loader)}]\t Loss: {loss.item()}")
+        bar.set_description(f"Loss: {loss.item():.4f}")
 
         if args.nr == 0:
             writer.add_scalar("Loss/train_epoch", loss.item(), args.global_step)
