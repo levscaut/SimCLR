@@ -27,15 +27,14 @@ from utils import yaml_config_hook
 def train(args, train_loader, model, criterion, optimizer, writer):
     loss_epoch = 0
     bar = tqdm(enumerate(train_loader), total=len(train_loader))
-    for step, ((x_i, x_j), _) in bar:
+    for step, (x, y) in bar:
         optimizer.zero_grad()
-        x_i = x_i.cuda(non_blocking=True)
-        x_j = x_j.cuda(non_blocking=True)
-
+        x = x.cuda(non_blocking=True)
+        y = y.cuda(non_blocking=True)
         # positive pair, with encoding
-        h_i, h_j, z_i, z_j = model(x_i, x_j)
+        pred = model(x)
 
-        loss = criterion(z_i, z_j)
+        loss = criterion(pred, y)
         loss.backward()
 
         optimizer.step()
@@ -79,7 +78,7 @@ def main(gpu, args):
         )
     else:
         raise NotImplementedError
-
+    
     if args.nodes > 1:
         train_sampler = torch.utils.data.distributed.DistributedSampler(
             train_dataset, num_replicas=args.world_size, rank=rank, shuffle=True
@@ -97,11 +96,11 @@ def main(gpu, args):
     )
 
     # initialize ResNet
-    encoder = get_resnet(args.resnet)(pretrained=False)
-    n_features = encoder.fc.in_features  # get dimensions of fc layer
+    num_classes = len(train_dataset.classes)
+    encoder = get_resnet(args.resnet)(num_classes=num_classes, pretrained=False)
 
     # initialize model
-    model = SimCLR(encoder, args.projection_dim, n_features)
+    model = encoder
     if args.reload:
         model_fp = os.path.join(
             args.model_path, "checkpoint_{}.tar".format(args.epoch_num)
@@ -111,7 +110,7 @@ def main(gpu, args):
 
     # optimizer / loss
     optimizer, scheduler = load_optimizer(args, model)
-    criterion = NT_Xent(args.batch_size, args.temperature, args.world_size)
+    criterion = torch.nn.CrossEntropyLoss()
 
     # DDP / DP
     if args.dataparallel:
