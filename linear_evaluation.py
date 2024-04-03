@@ -3,7 +3,7 @@ import argparse
 import torch
 import torchvision
 import torchvision.transforms as transforms
-from torchmetrics import Accuracy, Precision, Recall, F1
+from torchmetrics import Accuracy, Precision, Recall, F1Score
 import numpy as np
 
 from simclr import SimCLR
@@ -12,12 +12,14 @@ from simclr.modules.transformations import TransformsSimCLR
 
 from utils import yaml_config_hook
 
-def compute_metrics(preds, target):
+def compute_metrics(preds, target, num_classes=10, device=None):
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     metric_func = {
-        'acc': Accuracy(),
-        'precision': Precision(average="macro"),
-        'recall': Recall(average="macro"),
-        'f1': F1(average="macro")
+        'acc': Accuracy(task="multiclass", num_classes=num_classes).to(device),
+        'precision': Precision(task="multiclass", num_classes=num_classes, average="macro").to(device),
+        'recall': Recall(task="multiclass", num_classes=num_classes, average="macro").to(device),
+        'f1': F1Score(task="multiclass", num_classes=num_classes, average="macro").to(device)
     }
     metrics = {metric_name: metric_func[metric_name](preds, target) for metric_name in metric_func.keys()}
     return metrics
