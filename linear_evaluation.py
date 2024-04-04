@@ -4,6 +4,7 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 from torchmetrics import Accuracy, Precision, Recall, F1Score
+from torch.utils.data import Subset
 import numpy as np
 
 from simclr import SimCLR
@@ -172,6 +173,8 @@ if __name__ == "__main__":
             download=True,
             transform=TransformsSimCLR(size=args.image_size).test_transform,
         )
+        finetune_index = torch.randperm(len(train_dataset))[:args.ft_ratio * len(train_dataset)]
+        train_dataset = Subset(train_dataset, finetune_index)
         test_dataset = torchvision.datasets.CIFAR10(
             args.dataset_dir,
             train=False,
