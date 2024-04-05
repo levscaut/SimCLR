@@ -21,7 +21,7 @@ class TransformsSimCLR:
                 torchvision.transforms.RandomApply([color_jitter], p=0.8),
                 torchvision.transforms.RandomGrayscale(p=0.2),
                 torchvision.transforms.RandomErasing(p=0.5),
-                torchvision.transforms.GaussianBlur(kernel_size=int(0.1 * size)),
+                # torchvision.transforms.GaussianBlur(kernel_size=int(0.1 * size)),
                 torchvision.transforms.ToTensor(),
             ]
         )
